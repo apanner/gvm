@@ -21,16 +21,22 @@ from datetime import datetime
 class NukeInstallerGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Nuke Installation Wizard - Fully Automated")
-        self.root.geometry("850x750")
+        self.root.title("Nuke Installation Wizard")
+        # Smaller size for VM screens
+        self.root.geometry("700x600")
         self.root.resizable(True, True)
+        
+        # Set minimum size
+        self.root.minsize(650, 550)
         
         # Center the window on screen
         self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        width = min(700, screen_width - 50)
+        height = min(600, screen_height - 50)
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
         self.root.geometry(f"{width}x{height}+{x}+{y}")
         
         # File paths
@@ -52,13 +58,48 @@ class NukeInstallerGUI:
         self.setup_ui()
         
     def setup_ui(self):
-        # Main container
-        main_frame = ttk.Frame(self.root, padding="10")
+        # Create scrollable frame for entire GUI
+        # Create canvas and scrollbar
+        canvas = tk.Canvas(self.root, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mousewheel to canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+        canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
+        
+        # Update canvas width when window resizes
+        def configure_scroll_region(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            # Update canvas width to match scrollable_frame
+            canvas_width = event.width
+            canvas.itemconfig(canvas.find_all()[0], width=canvas_width)
+        
+        scrollable_frame.bind("<Configure>", configure_scroll_region)
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas.find_all()[0], width=e.width))
+        
+        # Main container (now inside scrollable frame)
+        main_frame = ttk.Frame(scrollable_frame, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Configure grid weights
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        scrollable_frame.columnconfigure(0, weight=1)
+        scrollable_frame.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         
         # Title
@@ -66,15 +107,15 @@ class NukeInstallerGUI:
                                font=("Arial", 16, "bold"))
         title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
         
-        # Sudo password info
-        sudo_frame = ttk.LabelFrame(main_frame, text="System Access", padding="10")
-        sudo_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        # Sudo password info (compact)
+        sudo_frame = ttk.LabelFrame(main_frame, text="System Access", padding="5")
+        sudo_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=2)
         sudo_frame.columnconfigure(0, weight=1)
         
         info_label = ttk.Label(sudo_frame, 
-                              text="⚠ You will be prompted for sudo password when installation starts (secure prompt)",
-                              foreground="blue", font=("Arial", 9))
-        info_label.grid(row=0, column=0, sticky=tk.W, pady=5)
+                              text="⚠ Sudo password will be prompted when installation starts",
+                              foreground="blue", font=("Arial", 8))
+        info_label.grid(row=0, column=0, sticky=tk.W, pady=2)
         
         # File selection section
         file_frame = ttk.LabelFrame(main_frame, text="File Selection", padding="10")
@@ -100,9 +141,9 @@ class NukeInstallerGUI:
         ttk.Button(file_frame, text="Auto-detect Files", 
                   command=self.auto_detect_files).grid(row=2, column=1, pady=10, sticky=tk.W)
         
-        # Detected files display
-        detected_frame = ttk.LabelFrame(main_frame, text="Detected Files", padding="10")
-        detected_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        # Detected files display (compact)
+        detected_frame = ttk.LabelFrame(main_frame, text="Detected Files", padding="5")
+        detected_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=2)
         detected_frame.columnconfigure(1, weight=1)
         
         self.detected_labels = {}
@@ -158,9 +199,9 @@ class NukeInstallerGUI:
         ttk.Button(license_frame, text="Refresh System Info", 
                   command=self.refresh_system_info).grid(row=2, column=0, columnspan=2, pady=5)
         
-        # Installation options
-        options_frame = ttk.LabelFrame(main_frame, text="Installation Options", padding="10")
-        options_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        # Installation options (compact)
+        options_frame = ttk.LabelFrame(main_frame, text="Options", padding="5")
+        options_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=2)
         options_frame.columnconfigure(1, weight=1)
         
         ttk.Label(options_frame, text="Install Path:").grid(row=0, column=0, sticky=tk.W, pady=5)
@@ -180,9 +221,9 @@ class NukeInstallerGUI:
         ttk.Checkbutton(options_frame, text="Setup passwordless sudo (optional - for convenience)", 
                        variable=self.setup_passwordless_sudo).grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=5)
         
-        # Progress/Log section - Terminal style
-        log_frame = ttk.LabelFrame(main_frame, text="Installation Log (Terminal Output)", padding="10")
-        log_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        # Progress/Log section - Terminal style (smaller for VM)
+        log_frame = ttk.LabelFrame(main_frame, text="Installation Log", padding="5")
+        log_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=3)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         main_frame.rowconfigure(6, weight=1)
@@ -191,24 +232,24 @@ class NukeInstallerGUI:
         # ScrolledText automatically includes a scrollbar
         self.log_text = scrolledtext.ScrolledText(
             log_frame, 
-            height=10,  # Reduced height to ensure scrollbar is visible
-            width=75,
+            height=6,  # Much smaller for VM screens
+            width=70,
             bg='#0d1117',  # Dark background (terminal black - GitHub dark style)
             fg='#c9d1d9',  # Light gray text (better readability)
             insertbackground='#00ff00',  # Green cursor
-            font=('Consolas', 9),  # Slightly smaller font
+            font=('Consolas', 8),  # Smaller font for VM
             wrap=tk.WORD,
             relief=tk.SUNKEN,
-            borderwidth=2,
-            padx=10,
-            pady=10,
+            borderwidth=1,
+            padx=5,
+            pady=5,
             state=tk.NORMAL,  # Allow text insertion
             selectbackground='#264f78',  # Selection background
             selectforeground='#ffffff',  # Selection text color
-            insertwidth=2,  # Cursor width
-            spacing1=1,  # Line spacing
-            spacing2=1,
-            spacing3=1
+            insertwidth=1,  # Cursor width
+            spacing1=0,  # No extra spacing
+            spacing2=0,
+            spacing3=0
         )
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
