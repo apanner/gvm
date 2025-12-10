@@ -457,13 +457,41 @@ class NukeInstallerGUI:
         self.log("Auto-detecting files...", "INFO")
         self.log(f"Searching in: {base_dir}", "INFO")
         
-        # First, look for FLT7 in base directory
+        # Search for FLT7 file - pattern: FLT7.1v1-linux-x86-release-64.tgz (as per plan.md step 6-7)
+        self.log("Searching for FLT7 .tgz file (pattern: FLT7*.tgz)...", "INFO")
+        
+        # Search base directory first
         for file in os.listdir(base_dir):
             file_path = os.path.join(base_dir, file)
-            if os.path.isfile(file_path) and 'flt7' in file.lower() and file.endswith('.tgz'):
-                self.detected_files['flt7_tgz'] = file_path
-                self.detected_labels['flt7_tgz'].config(text=file, foreground="green")
-                self.log(f"Found FLT7: {file}", "SUCCESS")
+            if os.path.isfile(file_path):
+                file_lower = file.lower()
+                # Look for FLT7 pattern: contains 'flt' and ends with .tgz
+                if ('flt' in file_lower or 'flt7' in file_lower) and file.endswith('.tgz'):
+                    self.detected_files['flt7_tgz'] = file_path
+                    self.detected_labels['flt7_tgz'].config(text=file, foreground="green")
+                    self.log(f"Found FLT7 in base directory: {file}", "SUCCESS")
+                    break
+        
+        # If not found, search ALL subdirectories recursively (including Crack/FLT7.1v1/)
+        if not self.detected_files['flt7_tgz']:
+            self.log("FLT7 not found in base directory, searching all subdirectories...", "INFO")
+            for root, dirs, files in os.walk(base_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if os.path.isfile(file_path) and file.endswith('.tgz'):
+                        file_lower = file.lower()
+                        # Look for FLT7 pattern: FLT7.1v1-linux-x86-release-64.tgz or similar
+                        # Check for 'flt' or 'flt7' in filename
+                        if 'flt' in file_lower or 'flt7' in file_lower:
+                            self.detected_files['flt7_tgz'] = file_path
+                            # Show relative path for better visibility
+                            rel_path = os.path.relpath(file_path, base_dir)
+                            self.detected_labels['flt7_tgz'].config(text=rel_path, foreground="green")
+                            self.log(f"Found FLT7 in subdirectory: {file_path}", "SUCCESS")
+                            self.log(f"  Relative path: {rel_path}", "INFO")
+                            break
+                if self.detected_files['flt7_tgz']:
+                    break
         
         # Look for Crack folder - common patterns: "Crack", "crack", "Linux/Crack", etc.
         crack_folder = None
@@ -908,18 +936,40 @@ class NukeInstallerGUI:
             self.log("Nuke installation completed successfully!", "SUCCESS")
             self.log("")
             
-            # Step 6-12: Install FLT7 License Server (AFTER Nuke)
-            print("\n[STEP 6-12] Installing FLT7 License Server (AFTER Nuke)...", flush=True)
-            self.log("[STEP 6-12] Installing FLT7 License Server (AFTER Nuke)...")
+            # Step 6-10: Install FLT7 License Server (as per plan.md)
+            print("\n[STEP 6-10] Installing FLT7 License Server (following plan.md)...", flush=True)
+            self.log("[STEP 6-10] Installing FLT7 License Server (following plan.md)...")
             
-            # Step 5-12: Install FLT7 License Server
-            print("\n[STEP 5-12] Installing FLT7 License Server...", flush=True)
-            self.log("[STEP 5-12] Installing FLT7 License Server...")
-            flt7_dir = os.path.dirname(flt7_tgz)
+            # Step 6: cd to FLT7 folder (where the .tgz file is located)
+            # plan.md says: "cd /Path/to/your_FLT7_Folder/FLT7.1v1-linux-x86-release-64.tgz"
+            # But that's wrong - you can't cd to a file. We need the FOLDER containing the .tgz file
+            flt7_dir = os.path.dirname(flt7_tgz)  # Get the folder path
+            flt7_file_name = os.path.basename(flt7_tgz)  # Get just the filename
+            
+            self.log(f"[STEP 6] Finding FLT7 folder containing: {flt7_file_name}")
+            self.log(f"[STEP 6] FLT7 folder path: {flt7_dir}")
+            self.log(f"[STEP 6] Changing to FLT7 folder: {flt7_dir}")
+            
+            # Verify the folder exists and contains the file
+            if not os.path.isdir(flt7_dir):
+                raise Exception(f"FLT7 folder does not exist: {flt7_dir}")
+            
+            if not os.path.exists(flt7_tgz):
+                raise Exception(f"FLT7 file not found: {flt7_tgz}")
+            
             os.chdir(flt7_dir)
+            self.log(f"[STEP 6] Current directory: {os.getcwd()}")
+            self.log(f"[STEP 6] Verifying FLT7 file exists in this folder...")
             
+            # Verify file is in current directory
+            if not os.path.exists(flt7_file_name):
+                raise Exception(f"FLT7 file {flt7_file_name} not found in {os.getcwd()}")
+            
+            self.log(f"[STEP 6] ✓ FLT7 file found: {flt7_file_name}", "SUCCESS")
+            
+            # Step 7: tar xvzf FLT7.1v1-linux-x86-release-64.tgz
             flt7_archive = os.path.basename(flt7_tgz)
-            self.log(f"Extracting {flt7_archive}...")
+            self.log(f"[STEP 7] Extracting {flt7_archive}...")
             try:
                 result = subprocess.run(['tar', 'xvzf', flt7_archive], 
                                      capture_output=True, text=True, check=True)
@@ -932,23 +982,49 @@ class NukeInstallerGUI:
                 self.log(f"Error extracting archive: {e.stderr}", "ERROR")
                 raise
             
-            # Find extracted directory
+            # Step 8: cd FLT7.1v1-linux-x86-release-64RH (as per plan.md)
             extracted_dir = None
+            self.log("[STEP 8] Looking for extracted FLT7 directory (FLT7.1v1-linux-x86-release-64RH)...")
+            
+            # Look for exact pattern from plan.md: FLT7.1v1-linux-x86-release-64RH
             for item in os.listdir('.'):
-                if os.path.isdir(item) and 'flt7' in item.lower():
-                    extracted_dir = item
-                    break
+                if os.path.isdir(item):
+                    item_lower = item.lower()
+                    # Match pattern: FLT7.1v1-linux-x86-release-64RH
+                    # Should contain: flt7/flt, linux, x86, and possibly RH
+                    if (('flt7' in item_lower or 'flt' in item_lower) and 
+                        ('linux' in item_lower or 'x86' in item_lower) and
+                        ('rh' in item_lower or 'release' in item_lower)):
+                        extracted_dir = item
+                        self.log(f"Found extracted directory matching plan.md pattern: {extracted_dir}", "SUCCESS")
+                        break
+            
+            # If not found, try broader search
+            if not extracted_dir:
+                self.log("Exact pattern not found, trying broader search...", "WARNING")
+                for item in os.listdir('.'):
+                    if os.path.isdir(item) and ('flt' in item.lower() or 'license' in item.lower()):
+                        extracted_dir = item
+                        self.log(f"Found extracted directory: {extracted_dir}", "SUCCESS")
+                        break
             
             if not extracted_dir:
-                raise Exception("Could not find extracted FLT7 directory")
+                # List all directories to help debug
+                dirs = [d for d in os.listdir('.') if os.path.isdir(d)]
+                self.log(f"Available directories: {', '.join(dirs)}", "WARNING")
+                raise Exception(f"Could not find extracted FLT7 directory. Available dirs: {', '.join(dirs)}")
             
-            self.log(f"Found extracted directory: {extracted_dir}")
+            self.log(f"[STEP 8] Changing to extracted directory: {extracted_dir}")
             os.chdir(extracted_dir)
+            self.log(f"Current directory: {os.getcwd()}")
             
-            self.log("Setting permissions on install.sh...")
+            # Step 9: sudo chmod a+rwx ./install.sh
+            self.log("[STEP 9] Setting permissions on install.sh...")
             self.run_sudo_command(['chmod', 'a+rwx', './install.sh'])
             
-            self.log("Running FLT7 installer...")
+            # Step 10: sudo ./install.sh or sudo bash install.sh
+            self.log("[STEP 10] Running FLT7 installer (install.sh)...")
+            self.log("NOTE: The FLT7 installer will install to /usr/local/foundry/ (default location)")
             self.run_sudo_command(['./install.sh'], check=False)
             
             self.log("FLT7 installation completed.")
@@ -996,15 +1072,88 @@ class NukeInstallerGUI:
             self.run_sudo_command(['cp', foundry_set, '/usr/local/foundry/RLM/foundry.set'])
             self.run_sudo_command(['cp', foundry_set, '/usr/local/foundry/LicensingTools7.1/bin/RLM/foundry.set'])
             
-            # Create and copy license file
-            self.log("Creating license file...")
-            license_content = self.create_license_file()
-            license_file_path = os.path.join(os.path.expanduser('~'), 'xf_foundry.lic')
-            with open(license_file_path, 'w') as f:
-                f.write(license_content)
+            # Step 21-22: Edit license file and copy (as per plan.md)
+            self.log("[STEP 21-22] Editing license file with system info and copying...")
             
-            self.log("Copying license file...")
-            self.run_sudo_command(['cp', license_file_path, '/usr/local/foundry/RLM/xf_foundry.lic'])
+            # Step 21: Edit xf_foundry.lic (as per plan.md - make copy first, then edit)
+            license_file_source = self.detected_files.get('license_file')
+            if not license_file_source:
+                # Try to find it in crack folder
+                if self.detected_files.get('crack_folder'):
+                    crack_lic = os.path.join(self.detected_files['crack_folder'], 'xf_foundry.lic')
+                    if os.path.exists(crack_lic):
+                        license_file_source = crack_lic
+            
+            if license_file_source and os.path.exists(license_file_source):
+                self.log(f"[STEP 21] Found license file: {license_file_source}")
+                # Make a copy to edit (as per plan.md note: "Don't open license file in linux before edit make copy")
+                edited_license_path = os.path.join(os.path.expanduser('~'), 'xf_foundry_edited.lic')
+                shutil.copy2(license_file_source, edited_license_path)
+                self.log("Created copy of license file for editing (as per plan.md step 21)")
+                
+                # Get system info using rlmutil (as per plan.md step 21)
+                hostname, mac_address = self.get_system_info_for_license()
+                port = "4101"
+                
+                # Read the license file
+                with open(edited_license_path, 'r') as f:
+                    license_content = f.read()
+                
+                # Step 21: Edit xf_foundry.lic replacing "HOST_NAME MAC_ADDRESS PORT"
+                self.log(f"[STEP 21] Editing license file with: HOST={hostname}, MAC={mac_address}, PORT={port}")
+                
+                # Replace HOST_NAME, MAC_ADDRESS, PORT in license file
+                lines = license_content.split('\n')
+                new_lines = []
+                replaced = False
+                
+                for line in lines:
+                    # Skip comments
+                    if line.strip().startswith('#'):
+                        new_lines.append(line)
+                        continue
+                    
+                    # Look for lines that might contain hostname, mac, port pattern
+                    if re.search(r'\b\w+\s+[0-9a-fA-F]+\s+\d+\b', line) or ('HOST' in line.upper() and 'MAC' in line.upper()):
+                        # Replace with new values
+                        new_line = f"{hostname} {mac_address} {port}"
+                        new_lines.append(new_line)
+                        replaced = True
+                        self.log(f"Replaced line: {line.strip()} -> {new_line}", "SUCCESS")
+                    elif line.strip() and not line.strip().startswith('#'):
+                        # If it's a non-comment line but doesn't match pattern, try to replace anyway
+                        new_line = f"{hostname} {mac_address} {port}"
+                        new_lines.append(new_line)
+                        replaced = True
+                        self.log(f"Replaced line: {line.strip()} -> {new_line}", "SUCCESS")
+                    else:
+                        new_lines.append(line)
+                
+                # If no replacement happened, add the license line
+                if not replaced:
+                    new_lines.append(f"{hostname} {mac_address} {port}")
+                    self.log("Added new license line", "SUCCESS")
+                
+                # Write edited license file
+                with open(edited_license_path, 'w') as f:
+                    f.write('\n'.join(new_lines))
+                
+                self.log(f"[STEP 21] License file edited and saved: {edited_license_path}", "SUCCESS")
+                self.log(f"Final license content: {hostname} {mac_address} {port}", "SUCCESS")
+                
+                # Step 22: Copy edited license file
+                self.log("[STEP 22] Copying edited license file to /usr/local/foundry/RLM/...")
+                self.run_sudo_command(['cp', edited_license_path, '/usr/local/foundry/RLM/xf_foundry.lic'])
+            else:
+                # Fallback: create new license file if not found in crack folder
+                self.log("License file not found in crack folder, creating new one...", "WARNING")
+                license_content = self.create_license_file()
+                license_file_path = os.path.join(os.path.expanduser('~'), 'xf_foundry.lic')
+                with open(license_file_path, 'w') as f:
+                    f.write(license_content)
+                
+                self.log("[STEP 22] Copying license file...")
+                self.run_sudo_command(['cp', license_file_path, '/usr/local/foundry/RLM/xf_foundry.lic'])
             
             # Step 23-25: Start license server
             self.log("[STEP 23-25] Starting license server...")
