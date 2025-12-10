@@ -287,19 +287,54 @@ class NukeInstallerGUI:
                               foreground="gray")
         info_label.grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
         
+        # Installation buttons (three-step process)
+        install_buttons_frame = ttk.LabelFrame(main_frame, text="Installation Steps", padding="10")
+        install_buttons_frame.grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        
+        # Step 1: FLT + License
+        step1_frame = ttk.Frame(install_buttons_frame)
+        step1_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Label(step1_frame, text="Step 1:", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=5)
+        self.flt_install_button = ttk.Button(step1_frame, text="Install FLT + License Setup", 
+                                            command=self.start_flt_installation, state=tk.NORMAL)
+        self.flt_install_button.pack(side=tk.LEFT, padx=5)
+        ttk.Label(step1_frame, text="(Steps 6-25: FLT install, license server)", 
+                 font=("Arial", 7), foreground="gray").pack(side=tk.LEFT, padx=5)
+        
+        # Step 2: Nuke Install
+        step2_frame = ttk.Frame(install_buttons_frame)
+        step2_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Label(step2_frame, text="Step 2:", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=5)
+        self.nuke_install_button = ttk.Button(step2_frame, text="Install Nuke", 
+                                             command=self.start_nuke_installation, state=tk.NORMAL)
+        self.nuke_install_button.pack(side=tk.LEFT, padx=5)
+        ttk.Label(step2_frame, text="(Steps 1-5: Nuke installation)", 
+                 font=("Arial", 7), foreground="gray").pack(side=tk.LEFT, padx=5)
+        
+        # Step 3: Alias Creation
+        step3_frame = ttk.Frame(install_buttons_frame)
+        step3_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Label(step3_frame, text="Step 3:", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=5)
+        self.alias_button = ttk.Button(step3_frame, text="Create nukex Alias", 
+                                      command=self.start_alias_creation, state=tk.NORMAL)
+        self.alias_button.pack(side=tk.LEFT, padx=5)
+        ttk.Label(step3_frame, text="(Bonus: Create nukex command)", 
+                 font=("Arial", 7), foreground="gray").pack(side=tk.LEFT, padx=5)
+        
         # Control buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=7, column=0, columnspan=3, pady=10)
-        
-        self.install_button = ttk.Button(button_frame, text="Start Full Installation", 
-                                        command=self.start_installation, state=tk.NORMAL)
-        self.install_button.pack(side=tk.LEFT, padx=5)
+        button_frame.grid(row=8, column=0, columnspan=3, pady=10)
         
         ttk.Button(button_frame, text="Clear Log", 
                   command=self.clear_log).pack(side=tk.LEFT, padx=5)
         
         ttk.Button(button_frame, text="Exit", 
                   command=self.root.quit).pack(side=tk.LEFT, padx=5)
+        
+        # Track installation state
+        self.flt_installed = False
+        self.nuke_installed = False
+        self.alias_created = False
         
         # Initialize system info
         self.refresh_system_info()
@@ -310,7 +345,11 @@ class NukeInstallerGUI:
         self.log("Nuke Installation Wizard - Terminal Log", "INFO")
         self.log("=" * 70, "INFO")
         self.log("", "INFO")
-        self.log("Ready to start installation. Click 'Start Full Installation' to begin.", "INFO")
+        self.log("Ready to start installation.", "INFO")
+        self.log("All installation steps are available. Run them in any order you prefer.", "INFO")
+        self.log("Step 1: Install FLT + License Setup", "INFO")
+        self.log("Step 2: Install Nuke", "INFO")
+        self.log("Step 3: Create nukex Alias", "INFO")
         self.log("", "INFO")
         
     def get_sudo_password(self):
@@ -756,25 +795,20 @@ class NukeInstallerGUI:
         
         return license_content
     
-    def start_installation(self):
-        """Start the installation process"""
-        errors = self.validate_inputs()
+    def start_flt_installation(self):
+        """Start FLT and License installation (Step 1)"""
+        # Validate inputs for FLT installation
+        errors = []
+        if not self.detected_files['flt7_tgz']:
+            errors.append("FLT7 .tgz file not found")
+        if not self.detected_files['rlm_foundry']:
+            errors.append("rlm.foundry file not found")
+        if not self.detected_files['license_file']:
+            errors.append("xf_foundry.lic file not found")
+        
         if errors:
             messagebox.showerror("Validation Error", 
-                               "Please fix the following errors:\n\n" + "\n".join(errors))
-            return
-        
-        # Confirm installation
-        response = messagebox.askyesno(
-            "Confirm Installation",
-            "This will install Nuke and configure the license server.\n\n"
-            "All steps will be executed automatically.\n\n"
-            "You will be prompted for sudo password when needed.\n\n"
-            "Do you want to continue?",
-            icon='warning'
-        )
-        
-        if not response:
+                               "Please fix the following errors:\n" + "\n".join(errors))
             return
         
         # Get sudo password securely
@@ -788,33 +822,80 @@ class NukeInstallerGUI:
         self.sudo_password = password
         self.log("Sudo password verified successfully", "SUCCESS")
         
-        # Disable install button
-        self.install_button.config(state=tk.DISABLED)
+        # Disable button
+        self.flt_install_button.config(state=tk.DISABLED)
         self.clear_log()
         
         # Start installation in separate thread
-        thread = threading.Thread(target=self.run_installation, daemon=True)
+        thread = threading.Thread(target=self.install_flt_and_license, daemon=True)
         thread.start()
     
-    def run_installation(self):
-        """Run the complete installation process"""
+    def start_nuke_installation(self):
+        """Start Nuke installation (Step 2)"""
+        # Validate inputs for Nuke installation
+        errors = []
+        if not self.nuke_run_file.get():
+            errors.append("Nuke installer file (.run or .tgz) is required")
+        elif not os.path.exists(self.nuke_run_file.get()):
+            errors.append("Nuke installer file does not exist")
+        
+        if errors:
+            messagebox.showerror("Validation Error", 
+                               "Please fix the following errors:\n" + "\n".join(errors))
+            return
+        
+        # Get sudo password securely
+        self.log("Prompting for sudo password...")
+        password = self.get_sudo_password()
+        
+        if not password:
+            self.log("Installation cancelled - no password provided", "WARNING")
+            return
+        
+        self.sudo_password = password
+        self.log("Sudo password verified successfully", "SUCCESS")
+        
+        # Disable button
+        self.nuke_install_button.config(state=tk.DISABLED)
+        self.clear_log()
+        
+        # Start installation in separate thread
+        thread = threading.Thread(target=self.install_nuke, daemon=True)
+        thread.start()
+    
+    def start_alias_creation(self):
+        """Start alias creation (Step 3)"""
+        # Get sudo password securely
+        self.log("Prompting for sudo password...")
+        password = self.get_sudo_password()
+        
+        if not password:
+            self.log("Installation cancelled - no password provided", "WARNING")
+            return
+        
+        self.sudo_password = password
+        self.log("Sudo password verified successfully", "SUCCESS")
+        
+        # Disable button
+        self.alias_button.config(state=tk.DISABLED)
+        self.clear_log()
+        
+        # Start alias creation in separate thread
+        thread = threading.Thread(target=self.create_alias, daemon=True)
+        thread.start()
+    
+    def install_nuke(self):
+        """Step 2: Install Nuke (Steps 1-5)"""
         try:
-            print("\n" + "=" * 70, flush=True)
-            print("NUKE INSTALLATION PROCESS STARTED", flush=True)
-            print("=" * 70 + "\n", flush=True)
-            
             self.log("=" * 70)
-            self.log("Starting Nuke Installation Process")
+            self.log("STEP 2: Installing Nuke")
             self.log("=" * 70)
             self.log("")
             
             nuke_run = self.nuke_run_file.get()
-            flt7_tgz = self.detected_files['flt7_tgz']
-            rlm_foundry = self.detected_files['rlm_foundry']
             install_path = self.install_path.get()
-            nuke_version = self.nuke_version.get()
             
-            # Step 1-5: Install Nuke FIRST (extract if .tgz, then install)
+            # Step 1-5: Install Nuke (extract if .tgz, then install)
             print("\n[STEP 1-5] Installing Nuke (FIRST)...", flush=True)
             self.log("[STEP 1-5] Installing Nuke (FIRST)...")
             nuke_dir = os.path.dirname(nuke_run)
@@ -912,6 +993,27 @@ class NukeInstallerGUI:
             
             self.log("Nuke installation completed successfully!", "SUCCESS")
             self.log("")
+            
+            # Mark as complete
+            self.nuke_installed = True
+            self.log("Step 2 completed successfully!", "SUCCESS")
+            
+        except Exception as e:
+            error_msg = str(e)
+            self.log(f"ERROR: {error_msg}", "ERROR")
+            messagebox.showerror("Error", f"Nuke installation error: {error_msg}\n\nCheck the log for details.")
+            self.root.after(0, lambda: self.nuke_install_button.config(state=tk.NORMAL))
+    
+    def install_flt_and_license(self):
+        """Step 1: Install FLT + License Setup (Steps 6-25)"""
+        try:
+            self.log("=" * 70)
+            self.log("STEP 1: Installing FLT + License Setup")
+            self.log("=" * 70)
+            self.log("")
+            
+            flt7_tgz = self.detected_files['flt7_tgz']
+            rlm_foundry = self.detected_files['rlm_foundry']
             
             # Step 6-10: Install FLT7 License Server (as per plan.md)
             print("\n[STEP 6-10] Installing FLT7 License Server (following plan.md)...", flush=True)
@@ -1139,6 +1241,27 @@ class NukeInstallerGUI:
             self.log("Verifying license server status...")
             stdout, _, _ = self.run_sudo_command(['/usr/local/foundry/LicensingTools7.1/FoundryLicenseUtility', '-s', 'status', '-t', 'RLM'], check=False)
             self.log(stdout)
+            
+            # Mark as complete
+            self.flt_installed = True
+            self.log("Step 1 completed successfully!", "SUCCESS")
+            
+        except Exception as e:
+            error_msg = str(e)
+            self.log(f"ERROR: {error_msg}", "ERROR")
+            messagebox.showerror("Error", f"FLT installation error: {error_msg}\n\nCheck the log for details.")
+            self.root.after(0, lambda: self.flt_install_button.config(state=tk.NORMAL))
+    
+    def create_alias(self):
+        """Step 3: Create nukex Alias (Bonus)"""
+        try:
+            self.log("=" * 70)
+            self.log("STEP 3: Creating nukex Alias")
+            self.log("=" * 70)
+            self.log("")
+            
+            install_path = self.install_path.get()
+            nuke_version = self.nuke_version.get()
             
             # Create alias
             self.log("[BONUS] Creating 'nukex' alias...")
@@ -1484,17 +1607,37 @@ exit 0
             
             messagebox.showinfo("Installation Complete", complete_msg)
             
+            # Mark as complete
+            self.alias_created = True
+            self.log("Step 3 completed! You can now use 'nukex' command to start Nuke", "SUCCESS")
+            self.log("(You may need to restart your terminal or run: source ~/.bashrc)")
+            
         except Exception as e:
             error_msg = str(e)
-            print(f"\n❌ ERROR: {error_msg}", flush=True, file=sys.stderr)
             self.log(f"ERROR: {error_msg}", "ERROR")
-            import traceback
-            traceback_str = traceback.format_exc()
-            print(traceback_str, flush=True, file=sys.stderr)
-            self.log(traceback_str, "ERROR")
-            messagebox.showerror("Error", f"Installation error: {error_msg}\n\nCheck the log for details.")
-        finally:
-            self.install_button.config(state=tk.NORMAL)
+            messagebox.showerror("Error", f"Alias creation error: {error_msg}\n\nCheck the log for details.")
+            self.root.after(0, lambda: self.alias_button.config(state=tk.NORMAL))
+    
+    def run_installation(self):
+        """Run the complete installation process (DEPRECATED - use separate step functions)"""
+        # This function is kept for backward compatibility but should use the three-step process instead
+        try:
+            print("\n" + "=" * 70, flush=True)
+            print("NUKE INSTALLATION PROCESS STARTED", flush=True)
+            print("=" * 70 + "\n", flush=True)
+            
+            self.log("=" * 70)
+            self.log("Starting Nuke Installation Process")
+            self.log("=" * 70)
+            self.log("")
+            
+            nuke_run = self.nuke_run_file.get()
+            flt7_tgz = self.detected_files['flt7_tgz']
+            rlm_foundry = self.detected_files['rlm_foundry']
+            install_path = self.install_path.get()
+            nuke_version = self.nuke_version.get()
+            
+            # Step 1-5: Install Nuke FIRST (extract if .tgz, then install)
 
 
 def main():
