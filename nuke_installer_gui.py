@@ -1315,7 +1315,7 @@ nukex() {{
     echo "$STATUS_OUTPUT"
     
     # Check if server is actually running (look for "rlm" or "running" in output)
-    if echo "$STATUS_OUTPUT" | grep -qi "rlm.*running\|server.*running\|started"; then
+    if echo "$STATUS_OUTPUT" | grep -qi "rlm.*running\\|server.*running\\|started"; then
         echo ""
         echo "✓ License server is running successfully!"
         echo ""
@@ -1366,7 +1366,7 @@ nukex() {{
     echo "$STATUS_OUTPUT"
     
     # Check if server is actually running
-    if echo "$STATUS_OUTPUT" | grep -qi "rlm.*running\|server.*running\|started"; then
+    if echo "$STATUS_OUTPUT" | grep -qi "rlm.*running\\|server.*running\\|started"; then
         echo ""
         echo "✓ License server is running successfully!"
         echo ""
@@ -1618,28 +1618,6 @@ exit 0
             messagebox.showerror("Error", f"Alias creation error: {error_msg}\n\nCheck the log for details.")
             self.root.after(0, lambda: self.alias_button.config(state=tk.NORMAL))
     
-    def run_installation(self):
-        """Run the complete installation process (DEPRECATED - use separate step functions)"""
-        # This function is kept for backward compatibility but should use the three-step process instead
-        try:
-            print("\n" + "=" * 70, flush=True)
-            print("NUKE INSTALLATION PROCESS STARTED", flush=True)
-            print("=" * 70 + "\n", flush=True)
-            
-            self.log("=" * 70)
-            self.log("Starting Nuke Installation Process")
-            self.log("=" * 70)
-            self.log("")
-            
-            nuke_run = self.nuke_run_file.get()
-            flt7_tgz = self.detected_files['flt7_tgz']
-            rlm_foundry = self.detected_files['rlm_foundry']
-            install_path = self.install_path.get()
-            nuke_version = self.nuke_version.get()
-            
-            # Step 1-5: Install Nuke FIRST (extract if .tgz, then install)
-
-
 def main():
     root = tk.Tk()
     app = NukeInstallerGUI(root)
