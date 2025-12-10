@@ -50,7 +50,6 @@ class NukeInstallerGUI:
         self.detected_files = {
             'flt7_tgz': None,
             'rlm_foundry': None,
-            'foundry_set': None,
             'license_file': None,  # xf_foundry.lic
             'crack_folder': None,  # Path to crack folder
         }
@@ -162,15 +161,6 @@ class NukeInstallerGUI:
         label.grid(row=row, column=1, sticky=tk.W, padx=5)
         self.detected_labels['rlm_foundry'] = label
         ttk.Label(detected_frame, text="(License server binary)", 
-                 font=("Arial", 7), foreground="gray").grid(row=row, column=2, sticky=tk.W, padx=5)
-        row += 1
-        
-        # foundry.set
-        ttk.Label(detected_frame, text="foundry.set:").grid(row=row, column=0, sticky=tk.W, pady=2)
-        label = ttk.Label(detected_frame, text="Not found", foreground="red")
-        label.grid(row=row, column=1, sticky=tk.W, padx=5)
-        self.detected_labels['foundry_set'] = label
-        ttk.Label(detected_frame, text="(RLM settings/config file)", 
                  font=("Arial", 7), foreground="gray").grid(row=row, column=2, sticky=tk.W, padx=5)
         row += 1
         
@@ -536,11 +526,6 @@ class NukeInstallerGUI:
                         self.detected_files['rlm_foundry'] = file_path
                         self.detected_labels['rlm_foundry'].config(text=file, foreground="green")
                         self.log(f"Found rlm.foundry: {file_path}", "SUCCESS")
-                    # Look for foundry.set
-                    elif file == 'foundry.set' or (file.lower().endswith('.set') and 'foundry' in file.lower()):
-                        self.detected_files['foundry_set'] = file_path
-                        self.detected_labels['foundry_set'].config(text=file, foreground="green")
-                        self.log(f"Found foundry.set: {file_path}", "SUCCESS")
                     # Look for license file
                     elif file == 'xf_foundry.lic' or (file.lower().endswith('.lic') and 'foundry' in file.lower()):
                         self.detected_files['license_file'] = file_path
@@ -548,7 +533,7 @@ class NukeInstallerGUI:
                         self.log(f"Found license file: {file_path}", "SUCCESS")
         
         # Also search recursively if files not found in crack folder
-        if not all([self.detected_files['rlm_foundry'], self.detected_files['foundry_set'], self.detected_files['license_file']]):
+        if not all([self.detected_files['rlm_foundry'], self.detected_files['license_file']]):
             self.log("Searching subdirectories for missing files...", "INFO")
             for root, dirs, files in os.walk(base_dir):
                 for file in files:
@@ -558,11 +543,6 @@ class NukeInstallerGUI:
                         self.detected_files['rlm_foundry'] = file_path
                         self.detected_labels['rlm_foundry'].config(text=file, foreground="green")
                         self.log(f"Found rlm.foundry: {file_path}", "SUCCESS")
-                    # Look for foundry.set
-                    if not self.detected_files['foundry_set'] and (file == 'foundry.set' or (file.lower().endswith('.set') and 'foundry' in file.lower())):
-                        self.detected_files['foundry_set'] = file_path
-                        self.detected_labels['foundry_set'].config(text=file, foreground="green")
-                        self.log(f"Found foundry.set: {file_path}", "SUCCESS")
                     # Look for license file
                     if not self.detected_files['license_file'] and (file == 'xf_foundry.lic' or (file.lower().endswith('.lic') and 'foundry' in file.lower())):
                         self.detected_files['license_file'] = file_path
@@ -695,8 +675,6 @@ class NukeInstallerGUI:
         if not self.detected_files['rlm_foundry']:
             errors.append("rlm.foundry file not found. Please ensure it's in the same folder.")
         
-        if not self.detected_files['foundry_set']:
-            errors.append("foundry.set file not found. Please ensure it's in the same folder.")
         
         return errors
     
@@ -833,7 +811,6 @@ class NukeInstallerGUI:
             nuke_run = self.nuke_run_file.get()
             flt7_tgz = self.detected_files['flt7_tgz']
             rlm_foundry = self.detected_files['rlm_foundry']
-            foundry_set = self.detected_files['foundry_set']
             install_path = self.install_path.get()
             nuke_version = self.nuke_version.get()
             
@@ -1056,21 +1033,17 @@ class NukeInstallerGUI:
             # Step 13-22: Copy crack files and license
             self.log("[STEP 13-22] Copying crack files and license...")
             
-            # Remove existing files
-            self.log("Removing existing license files...")
+            # Step 13-18: Remove existing files and copy rlm.foundry (as per plan.md)
+            self.log("[STEP 13-18] Removing existing license files and copying rlm.foundry...")
+            # Step 13-14: Remove existing rlm.foundry
             self.run_sudo_command(['rm', '-f', '/usr/local/foundry/RLM/rlm.foundry'], check=False)
             self.run_sudo_command(['rm', '-f', '/usr/local/foundry/LicensingTools7.1/bin/RLM/rlm.foundry'], check=False)
-            self.run_sudo_command(['rm', '-f', '/usr/local/foundry/RLM/foundry.set'], check=False)
-            self.run_sudo_command(['rm', '-f', '/usr/local/foundry/LicensingTools7.1/bin/RLM/foundry.set'], check=False)
             
-            # Copy crack files
+            # Step 17-18: Copy rlm.foundry
             self.log("Copying rlm.foundry...")
             self.run_sudo_command(['cp', rlm_foundry, '/usr/local/foundry/RLM/rlm.foundry'])
             self.run_sudo_command(['cp', rlm_foundry, '/usr/local/foundry/LicensingTools7.1/bin/RLM/rlm.foundry'])
-            
-            self.log("Copying foundry.set...")
-            self.run_sudo_command(['cp', foundry_set, '/usr/local/foundry/RLM/foundry.set'])
-            self.run_sudo_command(['cp', foundry_set, '/usr/local/foundry/LicensingTools7.1/bin/RLM/foundry.set'])
+            self.log("rlm.foundry copied successfully", "SUCCESS")
             
             # Step 21-22: Edit license file and copy (as per plan.md)
             self.log("[STEP 21-22] Editing license file with system info and copying...")
